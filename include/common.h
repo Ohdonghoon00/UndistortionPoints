@@ -45,26 +45,13 @@ struct DataBase
     std::vector<double> VIOtimestamps;
     std::vector<Vector6d> VIOLidarPoses;
 
-    std::vector<double> SlamKFtimestamps;
-    std::vector<Vector6d> SlamKFPoses;
-    std::vector<int> Slamcamidxs;
-
     std::vector<double> LidarLastseqtimestamps;
-    std::vector<double> Lidartimestamps;
+    // std::vector<double> Lidartimestamps;
     std::vector<Eigen::Matrix3Xd> LidarPoints;
 
-    std::map<int, int> VIOidx2Lidaridx;
+    // std::map<int, int> VIOidx2Lidaridx;
     std::map<int, int> Lidaridx2VIOidx;
 
-};
-
-struct OdometryData
-{
-    std::map< int, Vector6d > Odometry_WPose;
-    std::map< int, Vector6d > MappingHighFrequency_WPose;
-    std::map< int, Vector6d > Mapping_WPose;
-
-    // Vector6d RelPose(int a, int b){;}
 };
 
 Eigen::Vector3d ToVec3(Eigen::Matrix3d rot)
@@ -190,18 +177,6 @@ Eigen::Matrix4d To44RT(std::vector<double> pose)
     return RT;
 }
 
-// Vector6d RelativePose(std::map< int, Vector6d > Odometry_WPose, int a, int b)
-// {
-//     // if(a <= b){
-//         Eigen::Matrix4d RT_a = To44RT(Odometry_WPose[a]);
-//         Eigen::Matrix4d RT_b = To44RT(Odometry_WPose[b]);
-//         Eigen::Matrix4d RelPose = RT_a.inverse() * RT_b;
-//         Vector6d Relative_Pose = To6DOF(RelPose);
-        
-//         return Relative_Pose;
-//     // }
-// }
-
 double ToAngle(Eigen::Matrix4d LidarRotation)
 {
     Eigen::Matrix3d rot = LidarRotation.block<3, 3>(0, 0);
@@ -219,118 +194,3 @@ Eigen::Vector3d ToAxis(Eigen::Matrix4d LidarRotation)
 
     return Axis;
 }
-
-
-
-// sensor_msgs::PointCloud2 ConverToROSmsg(const std::vector<Eigen::Vector3d> &PointCloud)
-// {
-//     struct point { float x, y, z; };
-//     const size_t PointCloudNum = PointCloud.size();
-
-//     std::vector<uint8_t> data_buffer(PointCloudNum * sizeof(point));
-//     size_t idx = 0;
-
-//     point *dataptr = (point*) data_buffer.data();
-
-//     for(auto i : PointCloud){
-//         dataptr[idx++] = {(float)i(0), (float)i(1), (float)i(2)};
-//     }
-
-//     static const char* const names[3] = { "x", "y", "z" };
-//     static const std::size_t offsets[3] = { offsetof(point, x), offsetof(point, y), offsetof(point, z) };
-//     std::vector<sensor_msgs::PointField> fields(3);
-//     for (int i=0; i < 3; i++) {
-//         fields[i].name = names[i];
-//         fields[i].offset = offsets[i];
-//         fields[i].datatype = sensor_msgs::PointField::FLOAT32;
-//         fields[i].count = 1;
-//     }
-
-
-//     sensor_msgs::PointCloud2 msg;
-//     msg.height = 1;
-//     msg.width = PointCloudNum;
-//     msg.fields = fields;
-//     msg.is_bigendian = true;
-//     msg.point_step = sizeof(point);
-//     msg.row_step = sizeof(point) * msg.width;
-//     msg.data = std::move(data_buffer);
-//     msg.is_dense = true;
-
-//     return msg;
-// }
-
-// std::vector<Eigen::Vector3d> ConvertFromROSmsg(sensor_msgs::PointCloud2 &PointCloud)
-// {
-//     struct point { float x, y, z; };
-//     const size_t PointCloudNum = PointCloud.width;
-
-//     std::vector<uint8_t> data_buffer(PointCloudNum * sizeof(point));
-//     data_buffer = std::move(PointCloud.data);
-//     point *dataptr = (point*) data_buffer.data();
-
-//     std::vector<Eigen::Vector3d> points(PointCloudNum);
-//     for(size_t i = 0; i < PointCloudNum; i++){
-//         points[i].x() = (double)dataptr[i].x;
-//         points[i].y() = (double)dataptr[i].y;
-//         points[i].z() = (double)dataptr[i].z;
-//     }
-
-//     return points;
-// }
-
-// visualization_msgs::MarkerArray ConverToROSmsg(const ros::Time &timestamp, const std::string &frameid)
-// {
-//     visualization_msgs::MarkerArray msg_arr;
-//     visualization_msgs::Marker msg;
-    
-//     msg.header.stamp = timestamp;
-//     msg.header.frame_id = frameid;
-//     msg.action = visualization_msgs::Marker::DELETEALL;
-//     msg_arr.markers.push_back(msg);
-    
-//     return msg_arr;
-// }
-
-// void InputSlamPose(Eigen::Matrix4d RT, double *q, double *t)
-// {
-//     Eigen::Matrix3d r = RT.block<3, 3>(0, 0);
-//     Eigen::Quaterniond qq(r);
-
-//     q[0] = qq.x();
-//     q[1] = qq.y();
-//     q[2] = qq.z();
-//     q[3] = qq.w();
-
-//     t[0] = RT(0, 3);
-//     t[1] = RT(1, 3);
-//     t[2] = RT(2, 3);
-
-// }
-
-// float VerticalAngle(Eigen::Vector3d p){
-//   return atan(p.z() / sqrt(p.x() * p.x() + p.y() * p.y())) * 180 / M_PI;
-// }
-
-// double PointDistance(Eigen::Vector3d p){
-//   return sqrt(p.x()*p.x() + p.y()*p.y() + p.z()*p.z());
-// }
-
-// double PointDistance(Eigen::Vector3d p1, Eigen::Vector3d p2){
-//   return sqrt((p1.x()-p2.x())*(p1.x()-p2.x()) + (p1.y()-p2.y())*(p1.y()-p2.y()) + (p1.z()-p2.z())*(p1.z()-p2.z()));
-// }
-
-// double CosRaw2(double a, double b, float ang){
-//     return sqrt(a * a + b * b - 2 * a * b * cos(ang * M_PI / 180));
-// }
-
-// double NextChannelPointDis(Eigen::Vector3d p, float VerticalAngleRatio){
-    
-//     double dist = PointDistance(p);
-//     float VerticalAngle_ = VerticalAngle(p);
-//     double PointToLine = dist * cos(std::abs(VerticalAngle_) * M_PI / 180);
-//     float theta = std::abs(VerticalAngleRatio + VerticalAngle_);
-//     double NextPointDis = PointToLine / cos(theta * M_PI / 180);
-    
-//     return CosRaw2(dist, NextPointDis, VerticalAngleRatio);
-// }

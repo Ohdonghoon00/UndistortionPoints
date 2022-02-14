@@ -67,7 +67,7 @@ void MoveDistortionPoints(std::vector<Eigen::Vector3d> &points, const Eigen::Mat
     double angle = ToAngle(LidarRotation);
     Eigen::Vector3d Axis = ToAxis(LidarRotation);
     
-    double AngleRatio = (((double)(ScanStepNum + 1) / (double)(num_seqs)) * angle);
+    double AngleRatio = (((double)(num_seqs - ScanStepNum) / (double)num_seqs) * angle);
     Axis = (Axis * AngleRatio);
     
     Eigen::Matrix3d R = ToMat33(Axis);
@@ -78,7 +78,8 @@ void MoveDistortionPoints(std::vector<Eigen::Vector3d> &points, const Eigen::Mat
             R(2, 0), R(2, 1), R(2, 2), LidarRotation(2, 3),
             0,       0,       0,       1;
 
-    Eigen::Matrix4Xd MatrixPoints_ = RT.inverse() * MatrixPoints;
+    // move points
+    Eigen::Matrix4Xd MatrixPoints_ = RT * MatrixPoints;
     points.clear();
     for(int i = 0; i < PointNum; i++){
         Eigen::Vector3d Point;
@@ -89,11 +90,6 @@ void MoveDistortionPoints(std::vector<Eigen::Vector3d> &points, const Eigen::Mat
     }
 
 }
-
-
-
-
-
 
 int ReadIMUdata(const std::string Path, DataBase* db)
 {
@@ -132,7 +128,7 @@ int ReadIMUdata(const std::string Path, DataBase* db)
         while(std::getline(ss, IMUvalue, ','))
             IMUvalues.push_back(IMUvalue);
             
-        db->IMUtimestamps.push_back(std::stod(IMUvalues[0]) * 10e-10);
+        db->IMUtimestamps.push_back(std::stod(IMUvalues[0]) * 10e-10); // sec
 
         Eigen::Vector3f Gyro;
         Gyro.resize(3);
@@ -178,7 +174,8 @@ int ReadVIOdata(const std::string Path, DataBase *db)
         Eigen::Matrix4d Rigpos = To44RT(pos);
         Eigen::Matrix4d Lidarpos = LidarToRig.inverse() * Rigpos * LidarToRig;
 
-        db->VIOtimestamps.push_back(std::stod(values[7]) * 10e-10 );
+        // Save Lidar Pose by VIO all Frames ( Result of VIO )
+        db->VIOtimestamps.push_back(std::stod(values[7]) * 10e-10 ); // sec
         db->VIOLidarPoses.push_back(To6DOF(Lidarpos));
 
         line_num++;
@@ -187,6 +184,11 @@ int ReadVIOdata(const std::string Path, DataBase *db)
     Rovins2PoseFile.close();
     return EXIT_SUCCESS;
 }
+
+
+
+
+
 
 int ReadLidardata(const std::string Path, const std::string LidarBinaryPath, DataBase* db, bool ToUndistortionPoints)
 {
@@ -239,19 +241,9 @@ int ReadLidardata(const std::string Path, const std::string LidarBinaryPath, Dat
         // Read Binary data file
         int num_seqs = 0;
         ifs.read((char*)&num_seqs, sizeof(int));
-        
-        // Integral IMU rotation to one lidar scan
-        // Eigen::Matrix4d IMURotation_integral = Eigen::Matrix4d::Identity();
-        // while(LidarScantimestamp > db->IMUtimestamps[IMUcount]){
-        //     Eigen::Matrix4d IMURotation = gyroToRotation(db->IMUGyros[IMUcount]);
-        //     IMURotation_integral = IMURotation * IMURotation_integral;
-        //     IMUcount++;
-        //     if(IMUcount == db->IMUtimestamps.size()) break;
-        // }
 
-        // Integral IMU rotation to Camera two frames
+        // Integral IMU rotation
         Eigen::Matrix4d IMURotation_integral = Eigen::Matrix4d::Identity();
-        
         while(LidarScantimestamp > db->IMUtimestamps[IMUcount]){
             
             float timediff = 0;
@@ -265,16 +257,18 @@ int ReadLidardata(const std::string Path, const std::string LidarBinaryPath, Dat
             IMUcount++;
             if(IMUcount == db->IMUtimestamps.size()) break;
         }
-
+        
+        // IMU Rotation -> Lidar Motion
         Eigen::Matrix4d RT_ = IMUToRig * IMURotation_integral * IMUToRig.inverse();
         Eigen::Matrix4d RT = LidarToRig.inverse() * RT_ * LidarToRig;
         LidarRotation = RT;
 
-        std::vector<Eigen::Vector3d> Points;
         
+        std::vector<Eigen::Vector3d> TotalPoints;
         for (int j = 0; j < num_seqs; j++){
 
             
+            std::vector<Eigen::Vector3d> Points;
             int& num_pts = lidar_data.num_points;
             ifs.read((char*)&num_pts, sizeof(int));
             
@@ -297,27 +291,35 @@ int ReadLidardata(const std::string Path, const std::string LidarBinaryPath, Dat
             for(int k = 0; k < num_pts; k++){
 
                 Eigen::Vector3d point;
-                point.x() = (double)*(lidar_data.points_ptr() + k);
-                point.y() = (double)*(lidar_data.points_ptr() + k + 1);
-                point.z() = (double)*(lidar_data.points_ptr() + k + 2);
+                point.x() = (double)*(lidar_data.points_ptr() + 3 * k);
+                point.y() = (double)*(lidar_data.points_ptr() + 3 * k + 1);
+                point.z() = (double)*(lidar_data.points_ptr() + 3 * k + 2);
                 Points.push_back(point);
             }
             
             // UndistortionPoints
             if(ToUndistortionPoints) MoveDistortionPoints(Points, LidarRotation, j, num_seqs);
 
-            
+            for(int k = 0; k < Points.size(); k++){
+
+                Eigen::Vector3d point;
+                point.x() = Points[k].x();
+                point.y() = Points[k].y();
+                point.z() = Points[k].z();
+                TotalPoints.push_back(point);
+            }
         }
 
-        Eigen::Matrix3Xd UndistortionPoints(3, Points.size());
-        for(size_t i = 0; i < Points.size(); i++){
-            UndistortionPoints(0, i) = Points[i].x();
-            UndistortionPoints(1, i) = Points[i].y();
-            UndistortionPoints(2, i) = Points[i].z();
+        Eigen::Matrix3Xd UndistortionPoints(3, TotalPoints.size());
+        for(size_t i = 0; i < TotalPoints.size(); i++){
+            UndistortionPoints(0, i) = TotalPoints[i].x();
+            UndistortionPoints(1, i) = TotalPoints[i].y();
+            UndistortionPoints(2, i) = TotalPoints[i].z();
         }
+        
         db->LidarPoints.push_back(UndistortionPoints);
         
-        double timestamp_ = lidar_data.timestamp_ns * 10e-10;
+        double timestamp_ = lidar_data.timestamp_ns * 10e-10; //sec
         db->LidarLastseqtimestamps.push_back(timestamp_);
 
         ifs.close();
@@ -327,6 +329,8 @@ int ReadLidardata(const std::string Path, const std::string LidarBinaryPath, Dat
     LidarcsvFile.close();
     return EXIT_SUCCESS;
 }
+        
+
 
 int main(int argc, char** argv)
 {
@@ -342,6 +346,8 @@ int main(int argc, char** argv)
     std::cout << " Load VIO Data ... " << std::endl;
     std::string Rovins2PosePath = data_dir + "rovins2_all_frames.txt";
     
+
+    // for camera idx (no use)
     Vector6d p;
     p << 0, 0, 0, 0, 0, 0;
     DB.VIOLidarPoses.push_back(p);
@@ -353,9 +359,9 @@ int main(int argc, char** argv)
     std::cout << " Load Lidar Data ... " << std::endl;
     std::string LidarcsvPath = data_dir + "lidar_timestamp.csv";
     std::string Lidar_binary_path = data_dir + "lidar/";
-    ReadLidardata(LidarcsvPath, Lidar_binary_path, &DB, false);
+    ReadLidardata(LidarcsvPath, Lidar_binary_path, &DB, true);
     
-    int cnt = 1;
+    ////////////// Find Lidar idx - Camera idx /////////////////
     for(size_t i = 0; i < DB.LidarLastseqtimestamps.size(); i++){
         
         double MinVal = 1000;
@@ -369,27 +375,18 @@ int main(int argc, char** argv)
                 Minidx = j;
             }
         }
-
-        while(cnt < Minidx ){
-            DB.VIOidx2Lidaridx[cnt] = -1;
-            cnt++;
-        }
-        DB.VIOidx2Lidaridx[cnt] = i;
-        cnt++;
-        
-
         DB.Lidaridx2VIOidx[i] = Minidx;
     }
     
 
 
 
-    // save vio pose and UndistortionPoints
+    // Save VIO pose and UndistortionPoints
     std::cout << "SaveFile" << std::endl;
     std::ofstream VIOPose2LidarFrames;
-    std::string vioposefile = data_dir + "VIOPoses_lidarframes.txt";
-    VIOPose2LidarFrames.open(vioposefile);
-    
+    std::string VIOposefile = data_dir + "VIOPoses_lidarframes.txt";
+    VIOPose2LidarFrames.open(VIOposefile);
+
     std::string LidarBinaryPath = data_dir + "lidar2/";
     for(size_t i = 0; i < DB.LidarLastseqtimestamps.size(); i++){
         
@@ -401,15 +398,15 @@ int main(int argc, char** argv)
         int PointNum = DB.LidarPoints[i].cols();
         float point[DB.LidarPoints[i].cols() * 3];
         for(int j = 0; j < DB.LidarPoints[i].cols(); j++){
-            point[3 * j] = (float)DB.LidarPoints[i](0, j);
-            point[3 * j + 1] = (float)DB.LidarPoints[i](1, j);
-            point[3 * j + 2] = (float)DB.LidarPoints[i](2, j);
+            point[3 * j] = static_cast<float>(DB.LidarPoints[i](0, j));
+            point[3 * j + 1] = static_cast<float>(DB.LidarPoints[i](1, j));
+            point[3 * j + 2] = static_cast<float>(DB.LidarPoints[i](2, j));
         }
-        std::cout << "Point Num : " << PointNum << std::endl;
 
-        OutPoints.write((char*) &PointNum , sizeof(int));
-        OutPoints.write((char*) &point , sizeof(point));        
+        OutPoints.write(reinterpret_cast<char*>(&PointNum) , sizeof(int));
+        OutPoints.write(reinterpret_cast<char*>(&point) , sizeof(point));        
         
+        // Save Lidar Pose by Lidar Frames ( Result of VIO )
         int VIOidx = DB.Lidaridx2VIOidx[i];
         VIOPose2LidarFrames << VIOidx << " " << std::setprecision(7) << DB.VIOLidarPoses[VIOidx][0] << " " << DB.VIOLidarPoses[VIOidx][1] << " " << DB.VIOLidarPoses[VIOidx][2] << " "
                             << DB.VIOLidarPoses[VIOidx][3] << " " << DB.VIOLidarPoses[VIOidx][4] << " " << DB.VIOLidarPoses[VIOidx][5] << std::endl;
