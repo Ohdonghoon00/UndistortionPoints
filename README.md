@@ -2,11 +2,12 @@
 
 ## Inputs
 - Lidar Raw Points ( distortion points )
-- VIO result all camera frames poses
+- VIO Poses results all camera frames
 - IMU Gyro
 
 ## Build
 ```
+ git clone https://github.com/Ohdonghoon00/UndistortionPoints.git
  mkdir build
  cd build
  cmake ..
@@ -16,7 +17,7 @@
 ## Run
 ```
 ./UndirtortionPoints DATA_DIR/
-./UndirtortionPoints /home/multipleye/Dataset/201014_skt_lobby_day_lidar/
+Ex) ./UndirtortionPoints /home/multipleye/Dataset/201014_skt_lobby_day_lidar/
 ```
 
 ## Data Structure Ex
