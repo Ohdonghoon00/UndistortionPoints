@@ -1,0 +1,1 @@
+/usr/bin/c++  -O3 -Wall -g   CMakeFiles/UndirtortionPoints.dir/UndirtortionPoints.cpp.o  -o UndirtortionPoints -lglog 
