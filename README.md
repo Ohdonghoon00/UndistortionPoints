@@ -39,5 +39,5 @@ Data_DIR
     	├─ 00000.bin
     	├─ 00001.bin
     	└─ ...
-    └─ VIOPoses_lidarframes.txt // Lidar Pose by Lidar Frames ( Result of VIO )
+    └─ VIOLidarPoses_lidarframes.txt // Lidar Pose by Lidar Frames ( Result of VIO )
 ```
