@@ -384,7 +384,7 @@ int main(int argc, char** argv)
     // Save VIO pose and UndistortionPoints
     std::cout << "SaveFile" << std::endl;
     std::ofstream VIOPose2LidarFrames;
-    std::string VIOposefile = data_dir + "VIOPoses_lidarframes.txt";
+    std::string VIOposefile = data_dir + "VIOLidarPoses_lidarframes.txt";
     VIOPose2LidarFrames.open(VIOposefile);
 
     std::string LidarBinaryPath = data_dir + "lidar2/";
